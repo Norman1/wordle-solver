@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wordle Solver Assistant</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #121213;
+      --tile-border: #3a3a3c;
+      --tile-bg: #121213;
+      --tile-text: #d7dadc;
+      --tile-absent: #3a3a3c;
+      --tile-present: #b59f3b;
+      --tile-correct: #538d4e;
+      --accent: #6aaa64;
+      --warn: #e1a33b;
+      --error: #d9534f;
+      font-family: "Helvetica Neue", Arial, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--tile-text);
+      display: flex;
+      justify-content: center;
+      padding: 2rem 1rem 3rem;
+    }
+
+    .app {
+      width: min(720px, 100%);
+      display: flex;
+      flex-direction: column;
+      gap: 1.75rem;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: clamp(1.8rem, 2.5vw + 1rem, 2.6rem);
+      text-align: center;
+      letter-spacing: 0.05em;
+    }
+
+    header p {
+      margin: 0.5rem auto 0;
+      max-width: 48ch;
+      text-align: center;
+      color: #9aa0a6;
+      line-height: 1.5;
+    }
+
+    .panel {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .recommendation h2 {
+      margin: 0;
+      font-size: 1rem;
+      text-transform: uppercase;
+      color: #9aa0a6;
+      letter-spacing: 0.08em;
+    }
+
+    .recommendation-word {
+      font-size: clamp(1.4rem, 2.4vw + 1rem, 2rem);
+      font-weight: 600;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .board {
+      display: grid;
+      grid-template-rows: repeat(6, 1fr);
+      gap: 0.5rem;
+      justify-items: center;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.5rem;
+      width: min(360px, 90vw);
+    }
+
+    .tile {
+      width: 100%;
+      padding-top: 100%;
+      position: relative;
+      border: 2px solid var(--tile-border);
+      text-transform: uppercase;
+      font-size: clamp(1.5rem, 4vw, 2.2rem);
+      font-weight: 700;
+      display: grid;
+      place-items: center;
+      background: var(--tile-bg);
+      color: var(--tile-text);
+      cursor: pointer;
+      transition: transform 0.1s ease, border 0.1s ease;
+      user-select: none;
+    }
+
+    .tile span {
+      position: absolute;
+    }
+
+    .tile[data-state="present"] {
+      background: var(--tile-present);
+      border-color: var(--tile-present);
+    }
+
+    .tile[data-state="correct"] {
+      background: var(--tile-correct);
+      border-color: var(--tile-correct);
+    }
+
+    .tile[data-state="absent"][data-filled="true"] {
+      background: var(--tile-absent);
+      border-color: var(--tile-absent);
+    }
+
+    .tile[data-active="false"] {
+      cursor: default;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      justify-content: center;
+    }
+
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      cursor: pointer;
+      color: #f8f9fa;
+      background: var(--accent);
+      transition: transform 0.1s ease, opacity 0.2s ease;
+    }
+
+    button.secondary {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .status {
+      text-align: center;
+      color: #9aa0a6;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      min-height: 1.5em;
+    }
+
+    .status strong {
+      color: var(--tile-text);
+    }
+
+    .status.error {
+      color: var(--error);
+    }
+
+    .status.warning {
+      color: var(--warn);
+    }
+
+    .status.success {
+      color: var(--accent);
+    }
+
+    .diagnostics {
+      font-size: 0.9rem;
+      color: #9aa0a6;
+      line-height: 1.5;
+    }
+
+    .diagnostics code {
+      font-size: 0.95em;
+      color: #f8f9fa;
+    }
+
+    @media (max-width: 520px) {
+      .row {
+        gap: 0.4rem;
+      }
+
+      .tile {
+        font-size: clamp(1.4rem, 6vw, 1.8rem);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Wordle Solver Assistant</h1>
+      <p>Follow the recommendation, type your guess on the board, cycle each tile to match feedback, then apply it to see the next suggestion.</p>
+    </header>
+
+    <section class="panel recommendation" aria-live="polite">
+      <h2>Recommended Guess</h2>
+      <div class="recommendation-word" id="recommendation">-----</div>
+      <div class="status" id="summary"></div>
+    </section>
+
+    <section class="board" id="board" aria-label="Wordle board"></section>
+
+    <div class="controls">
+      <button id="apply-btn" disabled>Apply Feedback</button>
+      <button id="reset-btn" class="secondary">Reset Solver</button>
+    </div>
+
+    <div class="status" id="status-area" aria-live="assertive"></div>
+
+    <section class="panel diagnostics" aria-live="polite">
+      <div id="remaining"></div>
+      <div id="top-candidates"></div>
+    </section>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
