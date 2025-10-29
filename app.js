@@ -17,6 +17,7 @@ const elements = {
   status: document.getElementById('status-area'),
   remaining: document.getElementById('remaining'),
   topCandidates: document.getElementById('top-candidates'),
+  keyboard: document.getElementById('keyboard'),
 };
 
 const state = {
@@ -27,6 +28,8 @@ const state = {
   rows: [],
   activeRow: 0,
   solved: false,
+  keyboardKeys: new Map(),
+  letterStatuses: new Uint8Array(26),
 };
 
 main().catch((error) => {
@@ -45,6 +48,7 @@ async function main() {
   state.highValueWords = computeHighValueWords(state.allWordData);
 
   buildBoard();
+  buildKeyboard();
   bindEvents();
   resetSolver({ announce: false });
   setStatus('Solver ready. Start by typing the recommended guess.', 'info');
@@ -122,6 +126,38 @@ function bindEvents() {
   elements.resetBtn.addEventListener('click', () => resetSolver({ announce: true }));
 }
 
+function buildKeyboard() {
+  const layout = [
+    ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+    ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
+    ['enter', 'z', 'x', 'c', 'v', 'b', 'n', 'm', 'delete'],
+  ];
+
+  elements.keyboard.innerHTML = '';
+  state.keyboardKeys.clear();
+
+  for (const rowKeys of layout) {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'keyboard-row';
+
+    for (const label of rowKeys) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'key';
+      button.dataset.key = label;
+      button.textContent = label === 'delete' ? '⌫' : label === 'enter' ? 'Enter' : label.toUpperCase();
+      button.addEventListener('click', () => handleVirtualKey(label));
+      rowEl.appendChild(button);
+
+      if (label !== 'enter' && label !== 'delete') {
+        state.keyboardKeys.set(label, button);
+      }
+    }
+
+    elements.keyboard.appendChild(rowEl);
+  }
+}
+
 function handleKeydown(event) {
   if (state.solved) {
     return;
@@ -153,6 +189,28 @@ function handleKeydown(event) {
   if (/^[a-z]$/.test(key)) {
     event.preventDefault();
     insertLetter(key);
+  }
+}
+
+function handleVirtualKey(value) {
+  if (state.solved) {
+    return;
+  }
+
+  if (value === 'enter') {
+    if (!elements.applyBtn.disabled) {
+      onApplyFeedback();
+    }
+    return;
+  }
+
+  if (value === 'delete') {
+    removeLetter();
+    return;
+  }
+
+  if (/^[a-z]$/.test(value)) {
+    insertLetter(value);
   }
 }
 
@@ -256,6 +314,11 @@ function onApplyFeedback() {
     return;
   }
 
+  if (row.letters.some((letter) => !letter)) {
+    setStatus('Please fill all five letters before applying feedback.', 'warning');
+    return;
+  }
+
   const word = row.letters.join('');
   const pattern = row.statuses.map((tileState) => PATTERN_FROM_STATE[tileState || 'absent']).join('');
   const guessData = makeWordData(word);
@@ -300,6 +363,8 @@ function onApplyFeedback() {
     setRecommendation(pickNextRecommendation());
   }
 
+  updateLetterStatuses(row);
+  updateKeyboardVisuals();
   updateApplyButtonState();
   updateSummary();
   updateDiagnostics();
@@ -320,6 +385,7 @@ function resetSolver({ announce }) {
   state.guessHistory = [];
   state.activeRow = 0;
   state.solved = false;
+  state.letterStatuses.fill(0);
 
   state.rows.forEach((row, rowIndex) => {
     row.locked = false;
@@ -336,6 +402,7 @@ function resetSolver({ announce }) {
   updateApplyButtonState();
   updateSummary();
   updateDiagnostics();
+  updateKeyboardVisuals();
 
   if (announce) {
     setStatus('Solver reset. Type the recommendation or any five-letter word.', 'info');
@@ -642,4 +709,41 @@ function computeHighValueWords(wordData) {
   });
 
   return scored.slice(0, HIGH_VALUE_POOL_SIZE).map((item) => item.entry);
+}
+
+function updateLetterStatuses(row) {
+  const priority = {
+    absent: 1,
+    present: 2,
+    correct: 3,
+  };
+
+  for (let i = 0; i < WORD_LENGTH; i++) {
+    const letter = row.letters[i];
+    if (!letter) {
+      continue;
+    }
+    const code = letter.charCodeAt(0) - 97;
+    const stateLabel = row.statuses[i] || 'absent';
+    const weight = priority[stateLabel] || 0;
+    if (weight > state.letterStatuses[code]) {
+      state.letterStatuses[code] = weight;
+    }
+  }
+}
+
+function updateKeyboardVisuals() {
+  for (const [letter, button] of state.keyboardKeys.entries()) {
+    const code = letter.charCodeAt(0) - 97;
+    const value = state.letterStatuses[code];
+    let label = '';
+    if (value === 1) {
+      label = 'absent';
+    } else if (value === 2) {
+      label = 'present';
+    } else if (value >= 3) {
+      label = 'correct';
+    }
+    button.dataset.state = label;
+  }
 }

@@ -200,6 +200,55 @@
       color: #f8f9fa;
     }
 
+    .keyboard {
+      display: grid;
+      gap: 0.5rem;
+      justify-items: center;
+    }
+
+    .keyboard-row {
+      display: flex;
+      gap: 0.4rem;
+    }
+
+    .key {
+      min-width: 2.4rem;
+      padding: 0.75rem 0.45rem;
+      border-radius: 6px;
+      border: none;
+      background: rgba(255, 255, 255, 0.12);
+      color: #f8f9fa;
+      font-weight: 600;
+      font-size: 0.9rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: transform 0.1s ease, background 0.1s ease;
+    }
+
+    .key[data-state="present"] {
+      background: var(--tile-present);
+    }
+
+    .key[data-state="correct"] {
+      background: var(--tile-correct);
+    }
+
+    .key[data-state="absent"] {
+      background: #3a3a3c;
+    }
+
+    .key[data-key="enter"],
+    .key[data-key="delete"] {
+      min-width: 3.5rem;
+      font-size: 0.8rem;
+    }
+
+    .key:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
     @media (max-width: 520px) {
       .row {
         gap: 0.4rem;
@@ -215,7 +264,7 @@
   <div class="app">
     <header>
       <h1>Wordle Solver Assistant</h1>
-      <p>Follow the recommendation, type your guess on the board, cycle each tile to match feedback, then apply it to see the next suggestion.</p>
+      <p>Follow the recommendation, use your keyboard (or tap the on-screen keys) to enter a guess, cycle each tile to match the feedback, then apply it to see the next suggestion.</p>
     </header>
 
     <section class="panel recommendation" aria-live="polite">
@@ -225,6 +274,8 @@
     </section>
 
     <section class="board" id="board" aria-label="Wordle board"></section>
+
+    <section class="keyboard" id="keyboard" aria-label="On-screen keyboard"></section>
 
     <div class="controls">
       <button id="apply-btn" disabled>Apply Feedback</button>
