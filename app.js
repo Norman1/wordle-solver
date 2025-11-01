@@ -7,6 +7,7 @@ const PATTERN_FROM_STATE = { absent: '0', present: '1', correct: '2' };
 const LARGE_SET_THRESHOLD = 2000;
 const HIGH_VALUE_POOL_SIZE = 512;
 const DEFAULT_FALLBACK_RECOMMENDATION = 'soare';
+const SOLVE_PROBABILITY_WEIGHT = 1;
 
 const elements = {
   board: document.getElementById('board'),
@@ -553,12 +554,11 @@ function pickNextRecommendation() {
       score -= p * Math.log2(p);
     }
 
-    if (candidateSet.has(guess)) {
-      score += 0.0001;
-    }
+    const solveProbability = candidateSet.has(guess) ? 1 / candidateCount : 0;
+    const totalScore = score + SOLVE_PROBABILITY_WEIGHT * solveProbability + (solveProbability ? 0.0001 : 0);
 
-    if (score > bestScore || (score === bestScore && guess.word < bestWord)) {
-      bestScore = score;
+    if (totalScore > bestScore || (totalScore === bestScore && guess.word < bestWord)) {
+      bestScore = totalScore;
       bestWord = guess.word;
     }
   }
