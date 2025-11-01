@@ -21,7 +21,8 @@ const elements = {
 };
 
 const state = {
-  allWordData: [],
+  guessWordData: [],
+  answerWordData: [],
   candidates: [],
   highValueWords: [],
   guessHistory: [],
@@ -38,14 +39,18 @@ main().catch((error) => {
 });
 
 async function main() {
-  const words = await loadWordList();
-  if (!words.length) {
+  const { guessWordData, answerWordData } = await loadWordSets();
+  if (!guessWordData.length) {
     throw new Error('Word list is empty.');
   }
+  if (!answerWordData.length) {
+    throw new Error('Answer list is empty.');
+  }
 
-  state.allWordData = words.map(makeWordData);
-  state.candidates = state.allWordData.slice();
-  state.highValueWords = computeHighValueWords(state.allWordData);
+  state.guessWordData = guessWordData;
+  state.answerWordData = answerWordData;
+  state.candidates = answerWordData.slice();
+  state.highValueWords = computeHighValueWords(state.guessWordData);
 
   buildBoard();
   buildKeyboard();
@@ -54,8 +59,50 @@ async function main() {
   setStatus('Solver ready. Start by typing the recommended guess.', 'info');
 }
 
-async function loadWordList() {
-  const sourceUrl = new URL('./data/wordlist.txt', import.meta.url);
+async function loadWordSets() {
+  const guessWords = await loadWordListFile('./data/wordlist.txt', WORD_LIST_EMBEDDED);
+  if (!guessWords.length) {
+    return { guessWordData: [], answerWordData: [] };
+  }
+
+  let answerWords = await loadWordListFile('./data/answerlist.txt');
+  if (!answerWords.length) {
+    console.warn('Falling back to full word list for answers.');
+    answerWords = guessWords;
+  }
+
+  const guessSet = new Set(guessWords);
+  const overlappingAnswers = [];
+  let ignoredAnswers = 0;
+
+  for (const word of answerWords) {
+    if (guessSet.has(word)) {
+      overlappingAnswers.push(word);
+    } else {
+      ignoredAnswers += 1;
+    }
+  }
+
+  if (!overlappingAnswers.length) {
+    console.warn('Answer list did not overlap allowed guesses; reverting to full word list for answers.');
+    overlappingAnswers.push(...guessWords);
+  } else if (ignoredAnswers > 0) {
+    console.warn(`Omitted ${ignoredAnswers} answer words not present in allowed guesses.`);
+  }
+
+  const wordDataMap = new Map();
+  const guessWordData = guessWords.map((word) => {
+    const entry = makeWordData(word);
+    wordDataMap.set(word, entry);
+    return entry;
+  });
+  const answerWordData = overlappingAnswers.map((word) => wordDataMap.get(word));
+
+  return { guessWordData, answerWordData };
+}
+
+async function loadWordListFile(relativePath, embeddedFallback) {
+  const sourceUrl = new URL(relativePath, import.meta.url);
   try {
     const response = await fetch(sourceUrl);
     if (!response.ok) {
@@ -64,19 +111,25 @@ async function loadWordList() {
     const text = await response.text();
     return parseWordList(text);
   } catch (error) {
-    console.warn('Falling back to embedded word list.', error);
-    return WORD_LIST_EMBEDDED.slice().map((word) => word.toLowerCase());
+    if (embeddedFallback) {
+      console.warn(`Falling back to embedded list for ${relativePath}.`, error);
+      return normalizeWords(embeddedFallback);
+    }
+    console.warn(`Failed to load ${relativePath}.`, error);
+    return [];
   }
 }
 
 function parseWordList(text) {
-  const words = text
-    .split(/\s+/)
+  const words = text.split(/\s+/);
+  return normalizeWords(words);
+}
+
+function normalizeWords(words) {
+  const filtered = words
     .map((word) => word.trim().toLowerCase())
     .filter((word) => word.length === WORD_LENGTH && /^[a-z]+$/.test(word));
-
-  const unique = Array.from(new Set(words));
-  return unique;
+  return Array.from(new Set(filtered));
 }
 
 function buildBoard() {
@@ -381,7 +434,7 @@ function setRowActive(rowIndex, isActive) {
 }
 
 function resetSolver({ announce }) {
-  state.candidates = state.allWordData.slice();
+  state.candidates = state.answerWordData.slice();
   state.guessHistory = [];
   state.activeRow = 0;
   state.solved = false;
@@ -480,7 +533,7 @@ function pickNextRecommendation() {
   if (state.candidates.length >= LARGE_SET_THRESHOLD) {
     guessPool = mergeGuessPool(state.highValueWords, state.candidates);
   } else {
-    guessPool = state.allWordData;
+    guessPool = state.guessWordData;
   }
 
   let bestWord = '';

@@ -21,8 +21,9 @@ npx serve .
 The app loads automatically; follow the recommendation panel, type your guess letters, click tiles to match feedback colors, then press **Apply Feedback** to get the next suggestion.
 
 ## Word List
-- Primary list: `data/wordlist.txt` (downloaded from the open Wordle archive).
-- Embedded fallback: `data/wordlist-embedded.js` (auto-generated array) used when the fetch path is unavailable.
+- Allowed guesses: `data/wordlist.txt` (downloaded from the open Wordle archive).
+- Possible answers: `data/answerlist.txt` (the official solution pool, kept alongside the guess list).
+- Embedded fallback: `data/wordlist-embedded.js` (auto-generated array) used when the fetch path is unavailable. When the answer list cannot be fetched (e.g., `file://` protocol), the solver falls back to treating the full guess list as the answer pool.
 If you update the source list, regenerate the embedded copy with:
 ```bash
 node -e "const fs=require('fs');const words=fs.readFileSync('data/wordlist.txt','utf8').trim().split(/\\s+/);fs.writeFileSync('data/wordlist-embedded.js',`export const WORD_LIST_EMBEDDED = ${JSON.stringify(words)};`);"
