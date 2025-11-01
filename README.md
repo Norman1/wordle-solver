@@ -4,7 +4,6 @@ Browser-based helper that recommends high-entropy Wordle guesses. You type your 
 
 ## Features
 - Entropy-driven recommendations using the full answer list (no hard mode restriction).
-- Shows both the top overall guess and the best remaining answer, including entropy and solve-chance stats.
 - Wordle-style board with keyboard input and tile state cycling.
 - Candidate counts and shortlists when the pool shrinks.
 - Ships with a static word list and embedded fallback so it works offline or via `file://`.

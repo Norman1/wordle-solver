@@ -11,11 +11,7 @@ const elements = {
   board: document.getElementById('board'),
   applyBtn: document.getElementById('apply-btn'),
   resetBtn: document.getElementById('reset-btn'),
-  recommendationPrimary: document.getElementById('recommendation-primary'),
-  recommendationPrimaryMeta: document.getElementById('recommendation-primary-meta'),
-  recommendationAnswerSection: document.getElementById('recommendation-answer-section'),
-  recommendationAnswer: document.getElementById('recommendation-answer'),
-  recommendationAnswerMeta: document.getElementById('recommendation-answer-meta'),
+  recommendation: document.getElementById('recommendation'),
   summary: document.getElementById('summary'),
   status: document.getElementById('status-area'),
   remaining: document.getElementById('remaining'),
@@ -395,35 +391,26 @@ function onApplyFeedback() {
   if (solved) {
     state.solved = true;
     setStatus(`Solved! The answer is likely ${word.toUpperCase()}.`, 'success');
-    updateRecommendations({
-      overall: {
-        word,
-        entropy: 0,
-        solveProbability: 1,
-        totalScore: Number.POSITIVE_INFINITY,
-        isCandidate: true,
-      },
-      answer: null,
-    });
+    setRecommendation(word);
   } else if (state.activeRow === MAX_GUESSES - 1) {
     state.activeRow += 1;
     state.solved = exhausted;
     if (exhausted) {
       setStatus('No candidates remain. Check the feedback provided.', 'warning');
+      setRecommendation('');
     } else {
       setStatus('No guesses remaining. Reset to start over.', 'warning');
+      setRecommendation('');
     }
-    updateRecommendations(null);
   } else {
     state.activeRow += 1;
     setRowActive(state.activeRow, true);
     if (exhausted) {
       setStatus('No candidates remain. Adjust the feedback or reset.', 'warning');
-      updateRecommendations(null);
     } else {
       setStatus('', 'info');
-      updateRecommendations(pickNextRecommendation());
     }
+    setRecommendation(pickNextRecommendation());
   }
 
   updateLetterStatuses(row);
@@ -460,28 +447,15 @@ function resetSolver({ announce }) {
     setRowActive(rowIndex, rowIndex === 0);
   });
 
-  const recommendations = pickNextRecommendation();
-  if (recommendations) {
-    updateRecommendations(recommendations);
-  } else {
-    updateRecommendations({
-      overall: {
-        word: DEFAULT_FALLBACK_RECOMMENDATION,
-        entropy: 0,
-        solveProbability: 0,
-        totalScore: Number.NEGATIVE_INFINITY,
-        isCandidate: false,
-      },
-      answer: null,
-    });
-  }
+  const recommendation = pickNextRecommendation() || DEFAULT_FALLBACK_RECOMMENDATION;
+  setRecommendation(recommendation);
   updateApplyButtonState();
   updateSummary();
   updateDiagnostics();
   updateKeyboardVisuals();
 
   if (announce) {
-    setStatus('Solver reset. Type one of the recommended guesses or any five-letter word.', 'info');
+    setStatus('Solver reset. Type the recommendation or any five-letter word.', 'info');
   }
 }
 
@@ -511,52 +485,12 @@ function updateDiagnostics() {
   }
 }
 
-function updateRecommendations(recommendations) {
-  const primaryWordEl = elements.recommendationPrimary;
-  const primaryMetaEl = elements.recommendationPrimaryMeta;
-  const secondarySection = elements.recommendationAnswerSection;
-  const secondaryWordEl = elements.recommendationAnswer;
-  const secondaryMetaEl = elements.recommendationAnswerMeta;
-
-  if (!recommendations || !recommendations.overall) {
-    primaryWordEl.textContent = '-----';
-    primaryMetaEl.textContent = '';
-    secondarySection.setAttribute('hidden', 'true');
-    secondaryWordEl.textContent = '-----';
-    secondaryMetaEl.textContent = '';
+function setRecommendation(word) {
+  if (!word) {
+    elements.recommendation.textContent = '-----';
     return;
   }
-
-  const { overall, answer } = recommendations;
-  primaryWordEl.textContent = overall.word.toUpperCase();
-  primaryMetaEl.textContent = formatRecommendationMeta(overall);
-
-  if (answer && answer.word !== overall.word) {
-    secondarySection.removeAttribute('hidden');
-    secondaryWordEl.textContent = answer.word.toUpperCase();
-    secondaryMetaEl.textContent = formatRecommendationMeta(answer);
-  } else {
-    secondarySection.setAttribute('hidden', 'true');
-    secondaryWordEl.textContent = '-----';
-    secondaryMetaEl.textContent = '';
-  }
-}
-
-function formatRecommendationMeta(entry) {
-  if (!entry) {
-    return '';
-  }
-
-  const entropy = Number.isFinite(entry.entropy) ? entry.entropy : 0;
-  const entropyText = `Entropy: ${entropy.toFixed(2)} bits`;
-
-  if (entry.solveProbability > 0) {
-    const percentageRaw = (entry.solveProbability * 100).toFixed(1);
-    const percentage = percentageRaw.endsWith('.0') ? percentageRaw.slice(0, -2) : percentageRaw;
-    return `${entropyText} · Solve chance: ${percentage}%`;
-  }
-
-  return entropyText;
+  elements.recommendation.textContent = word.toUpperCase();
 }
 
 function setStatus(message, tone) {
@@ -579,19 +513,23 @@ function setStatus(message, tone) {
 
 function pickNextRecommendation() {
   if (state.solved || state.activeRow >= MAX_GUESSES) {
-    return null;
+    return '';
   }
 
-  const candidateCount = state.candidates.length;
-  if (candidateCount === 0) {
-    return null;
+  if (state.candidates.length === 0) {
+    return '';
+  }
+
+  if (state.candidates.length === 1) {
+    return state.candidates[0].word;
   }
 
   const candidateSet = new Set(state.candidates);
   const guessPool = state.guessWordData;
 
-  let bestOverall = null;
-  let bestAnswer = null;
+  let bestWord = '';
+  let bestScore = -Infinity;
+  const candidateCount = state.candidates.length;
 
   for (const guess of guessPool) {
     const buckets = Object.create(null);
@@ -600,41 +538,22 @@ function pickNextRecommendation() {
       buckets[pattern] = (buckets[pattern] || 0) + 1;
     }
 
-    let entropy = 0;
+    let score = 0;
     for (const value of Object.values(buckets)) {
       const p = value / candidateCount;
-      entropy -= p * Math.log2(p);
+      score -= p * Math.log2(p);
     }
 
-    const isCandidate = candidateSet.has(guess);
-    const solveProbability = isCandidate ? 1 / candidateCount : 0;
-    const totalScore =
-      entropy + SOLVE_PROBABILITY_WEIGHT * solveProbability + (solveProbability ? 0.0001 : 0);
+    const solveProbability = candidateSet.has(guess) ? 1 / candidateCount : 0;
+    const totalScore = score + SOLVE_PROBABILITY_WEIGHT * solveProbability + (solveProbability ? 0.0001 : 0);
 
-    const result = {
-      word: guess.word,
-      entropy,
-      solveProbability,
-      totalScore,
-      isCandidate,
-    };
-
-    if (!bestOverall || totalScore > bestOverall.totalScore || (totalScore === bestOverall.totalScore && guess.word < bestOverall.word)) {
-      bestOverall = result;
-    }
-
-    if (isCandidate) {
-      if (
-        !bestAnswer ||
-        totalScore > bestAnswer.totalScore ||
-        (totalScore === bestAnswer.totalScore && guess.word < bestAnswer.word)
-      ) {
-        bestAnswer = result;
-      }
+    if (totalScore > bestScore || (totalScore === bestScore && guess.word < bestWord)) {
+      bestScore = totalScore;
+      bestWord = guess.word;
     }
   }
 
-  return { overall: bestOverall, answer: bestAnswer };
+  return bestWord;
 }
 
 function makeWordData(word) {
