@@ -69,6 +69,24 @@
       letter-spacing: 0.08em;
     }
 
+    .recommendation-group {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .recommendation-item {
+      display: grid;
+      gap: 0.35rem;
+      justify-items: center;
+    }
+
+    .recommendation-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #9aa0a6;
+    }
+
     .recommendation-word {
       font-size: clamp(1.4rem, 2.4vw + 1rem, 2rem);
       font-weight: 600;
@@ -79,6 +97,12 @@
       padding: 0.75rem 1rem;
       border-radius: 10px;
       border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .recommendation-meta {
+      font-size: 0.85rem;
+      color: #9aa0a6;
+      text-align: center;
     }
 
     .board {
@@ -268,8 +292,19 @@
     </header>
 
     <section class="panel recommendation" aria-live="polite">
-      <h2>Recommended Guess</h2>
-      <div class="recommendation-word" id="recommendation">-----</div>
+      <h2>Recommended Guesses</h2>
+      <div class="recommendation-group">
+        <div class="recommendation-item">
+          <div class="recommendation-label">Best Overall Guess</div>
+          <div class="recommendation-word" id="recommendation-primary">-----</div>
+          <div class="recommendation-meta" id="recommendation-primary-meta"></div>
+        </div>
+        <div class="recommendation-item" id="recommendation-answer-section" hidden>
+          <div class="recommendation-label">Best Answer Candidate</div>
+          <div class="recommendation-word" id="recommendation-answer">-----</div>
+          <div class="recommendation-meta" id="recommendation-answer-meta"></div>
+        </div>
+      </div>
       <div class="status" id="summary"></div>
     </section>
 
