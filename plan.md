@@ -3,7 +3,7 @@
 ## 1. Word List Acquisition
 - Download the canonical Wordle word list once during development from `https://raw.githubusercontent.com/tabatkins/wordle-list/main/words.txt` and check it into the repo as `data/wordlist.txt`.
 - At runtime, load the local static file with `fetch(new URL('./data/wordlist.txt', import.meta.url))`; if served via `file://`, fall back to an embedded copy to avoid CORS/file-origin issues.
-- Use the stored set as both possible solutions and allowable guesses to keep implementation and UI logic simple.
+- Load `data/wordlist.txt` as the allowed guess set and `data/answerlist.txt` as the narrower solution pool; keep the fallback logic so the app still works when the answer list fails to load.
 
 -## 2. Application Structure
 - Build a single-page `index.html` containing semantic markup and optionally inline CSS for layout/theme.
