@@ -4,8 +4,6 @@ const WORD_LENGTH = 5;
 const MAX_GUESSES = 6;
 const TILE_STATES = ['absent', 'present', 'correct'];
 const PATTERN_FROM_STATE = { absent: '0', present: '1', correct: '2' };
-const LARGE_SET_THRESHOLD = 2000;
-const HIGH_VALUE_POOL_SIZE = 512;
 const DEFAULT_FALLBACK_RECOMMENDATION = 'soare';
 const SOLVE_PROBABILITY_WEIGHT = 1;
 
@@ -25,7 +23,6 @@ const state = {
   guessWordData: [],
   answerWordData: [],
   candidates: [],
-  highValueWords: [],
   guessHistory: [],
   rows: [],
   activeRow: 0,
@@ -51,7 +48,6 @@ async function main() {
   state.guessWordData = guessWordData;
   state.answerWordData = answerWordData;
   state.candidates = answerWordData.slice();
-  state.highValueWords = computeHighValueWords(state.guessWordData);
 
   buildBoard();
   buildKeyboard();
@@ -529,13 +525,7 @@ function pickNextRecommendation() {
   }
 
   const candidateSet = new Set(state.candidates);
-  let guessPool;
-
-  if (state.candidates.length >= LARGE_SET_THRESHOLD) {
-    guessPool = mergeGuessPool(state.highValueWords, state.candidates);
-  } else {
-    guessPool = state.guessWordData;
-  }
+  const guessPool = state.guessWordData;
 
   let bestWord = '';
   let bestScore = -Infinity;
@@ -564,47 +554,6 @@ function pickNextRecommendation() {
   }
 
   return bestWord;
-}
-
-function mergeGuessPool(highValueWords, candidates) {
-  const merged = [];
-  const seen = new Set();
-
-  const candidateQuota = Math.min(
-    candidates.length,
-    Math.max(128, Math.floor(HIGH_VALUE_POOL_SIZE / 2))
-  );
-
-  for (let i = 0; i < candidateQuota; i++) {
-    const entry = candidates[i];
-    if (!entry) {
-      break;
-    }
-    merged.push(entry);
-    seen.add(entry);
-  }
-
-  for (const entry of highValueWords) {
-    if (merged.length >= HIGH_VALUE_POOL_SIZE) {
-      break;
-    }
-    if (!seen.has(entry)) {
-      merged.push(entry);
-      seen.add(entry);
-    }
-  }
-
-  let index = candidateQuota;
-  while (merged.length < HIGH_VALUE_POOL_SIZE && index < candidates.length) {
-    const entry = candidates[index];
-    if (!seen.has(entry)) {
-      merged.push(entry);
-      seen.add(entry);
-    }
-    index += 1;
-  }
-
-  return merged;
 }
 
 function makeWordData(word) {
@@ -727,41 +676,6 @@ function matchesConstraint(candidate, constraint) {
   }
 
   return true;
-}
-
-function computeHighValueWords(wordData) {
-  const frequency = new Float32Array(26);
-
-  for (const entry of wordData) {
-    const seen = new Uint8Array(26);
-    for (const code of entry.codes) {
-      if (!seen[code]) {
-        seen[code] = 1;
-        frequency[code] += 1;
-      }
-    }
-  }
-
-  const scored = wordData.map((entry) => {
-    const uniqueness = new Uint8Array(26);
-    let score = 0;
-    for (const code of entry.codes) {
-      if (!uniqueness[code]) {
-        uniqueness[code] = 1;
-        score += frequency[code];
-      }
-    }
-    return { entry, score };
-  });
-
-  scored.sort((a, b) => {
-    if (b.score === a.score) {
-      return a.entry.word.localeCompare(b.entry.word);
-    }
-    return b.score - a.score;
-  });
-
-  return scored.slice(0, HIGH_VALUE_POOL_SIZE).map((item) => item.entry);
 }
 
 function updateLetterStatuses(row) {
